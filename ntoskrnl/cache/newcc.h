@@ -45,6 +45,10 @@ CcPfInitializePrefetcher(VOID);
 
 VOID
 NTAPI
+CcPfShutdownPrefetcher(VOID);
+
+VOID
+NTAPI
 CcMdlReadComplete2(IN PFILE_OBJECT FileObject,
                    IN PMDL MemoryDescriptorList);
 

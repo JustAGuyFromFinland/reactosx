@@ -1134,7 +1134,19 @@ PspExitProcess(IN BOOLEAN LastThread,
             /* FIXME: Check job status code and do I/O completion if needed */
         }
 
-        /* FIXME: Notify the Prefetcher */
+        if (CcPfEnablePrefetcher && Process->PrefetchTrace.Object)
+        {
+            PPFSN_TRACE_HEADER Trace = (PPFSN_TRACE_HEADER)Process->PrefetchTrace.Object;
+
+            Process->PrefetchTrace.Object = NULL;
+
+            if (CcPfGlobals.ActivePrefetches > 0)
+            {
+                InterlockedDecrement(&CcPfGlobals.ActivePrefetches);
+            }
+
+            CcPfDestroyTrace(Trace);
+        }
     }
     else
     {

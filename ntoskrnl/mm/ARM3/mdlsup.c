@@ -1850,8 +1850,74 @@ NTAPI
 MmPrefetchPages(IN ULONG NumberOfLists,
                 IN PREAD_LIST *ReadLists)
 {
-    UNIMPLEMENTED;
-    return STATUS_NOT_IMPLEMENTED;
+    ULONG ListIndex;
+
+    PAGED_CODE();
+
+    if ((NumberOfLists == 0) || (ReadLists == NULL))
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    for (ListIndex = 0; ListIndex < NumberOfLists; ListIndex++)
+    {
+        PREAD_LIST ReadList = ReadLists[ListIndex];
+        PROS_SHARED_CACHE_MAP SharedCacheMap;
+        ULONG EntryIndex;
+
+        if ((ReadList == NULL) ||
+            (ReadList->FileObject == NULL) ||
+            (ReadList->FileObject->SectionObjectPointer == NULL))
+        {
+            return STATUS_INVALID_PARAMETER;
+        }
+
+        SharedCacheMap = ReadList->FileObject->SectionObjectPointer->SharedCacheMap;
+        if (SharedCacheMap == NULL)
+        {
+            continue;
+        }
+
+        for (EntryIndex = 0; EntryIndex < ReadList->NumberOfEntries; EntryIndex++)
+        {
+            PROS_VACB Vacb;
+            LONGLONG FileOffset;
+            ULONG VacbOffset;
+            ULONG Length;
+
+            FileOffset = (LONGLONG)(ReadList->List[EntryIndex].Alignment & ~(PAGE_SIZE - 1ULL));
+            Length = PAGE_SIZE;
+            VacbOffset = (ULONG)(FileOffset & (VACB_MAPPING_GRANULARITY - 1));
+
+            if (!NT_SUCCESS(CcRosRequestVacb(SharedCacheMap, FileOffset & ~(VACB_MAPPING_GRANULARITY - 1ULL), &Vacb)))
+            {
+                return STATUS_INSUFFICIENT_RESOURCES;
+            }
+
+            _SEH2_TRY
+            {
+                if (!CcRosEnsureVacbResident(Vacb,
+                                             TRUE,
+                                             FALSE,
+                                             VacbOffset,
+                                             Length))
+                {
+                    CcRosReleaseVacb(SharedCacheMap, Vacb, FALSE, FALSE);
+                    return STATUS_UNSUCCESSFUL;
+                }
+            }
+            _SEH2_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
+            {
+                CcRosReleaseVacb(SharedCacheMap, Vacb, FALSE, FALSE);
+                return _SEH2_GetExceptionCode();
+            }
+            _SEH2_END;
+
+            CcRosReleaseVacb(SharedCacheMap, Vacb, FALSE, FALSE);
+        }
+    }
+
+    return STATUS_SUCCESS;
 }
 
 /*

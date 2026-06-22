@@ -65,7 +65,23 @@ PspUserThreadStartup(IN PKSTART_ROUTINE StartRoutine,
         /* Check if the Prefetcher is enabled */
         if (CcPfEnablePrefetcher)
         {
-            /* FIXME: Prepare to prefetch this process */
+            PEPROCESS Process = PsGetCurrentProcess();
+            PPFSN_TRACE_HEADER Trace;
+
+            Trace = CcPfCreateTrace(Process, 0);
+            if (Trace != NULL)
+            {
+                if (InterlockedCompareExchangePointer(&Process->PrefetchTrace.Object,
+                                                      Trace,
+                                                      NULL) != NULL)
+                {
+                    CcPfDestroyTrace(Trace);
+                }
+                else
+                {
+                    InterlockedIncrement(&CcPfGlobals.ActivePrefetches);
+                }
+            }
         }
 
         /* Raise to APC */

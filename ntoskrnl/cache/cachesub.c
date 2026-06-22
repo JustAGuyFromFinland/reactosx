@@ -323,6 +323,8 @@ CcShutdownSystem(VOID)
     Status = MiRosTrimCache(~0, 0, &Result);
 
     DPRINT1("Done (Evicted %d, Status %x)\n", Result, Status);
+
+    CcPfShutdownPrefetcher();
 }
 
 

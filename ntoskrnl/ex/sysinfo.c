@@ -2416,9 +2416,26 @@ QSI_DEF(SystemNumaProcessorMap)
 /* Class 56 - Prefetcher information */
 QSI_DEF(SystemPrefetcherInformation)
 {
-    /* FIXME */
-    DPRINT1("NtQuerySystemInformation - SystemPrefetcherInformation not implemented\n");
-    return STATUS_NOT_IMPLEMENTED;
+    typedef struct _SYSTEM_PREFETCHER_INFORMATION
+    {
+        ULONG PrefetcherEnabled;
+        ULONG ActivePrefetches;
+    } SYSTEM_PREFETCHER_INFORMATION, *PSYSTEM_PREFETCHER_INFORMATION;
+
+    PSYSTEM_PREFETCHER_INFORMATION PrefetcherInformation =
+        (PSYSTEM_PREFETCHER_INFORMATION)Buffer;
+
+    *ReqSize = sizeof(SYSTEM_PREFETCHER_INFORMATION);
+
+    if (Size < sizeof(SYSTEM_PREFETCHER_INFORMATION))
+    {
+        return STATUS_INFO_LENGTH_MISMATCH;
+    }
+
+    PrefetcherInformation->PrefetcherEnabled = CcPfEnablePrefetcher ? 1 : 0;
+    PrefetcherInformation->ActivePrefetches = (ULONG)CcPfGlobals.ActivePrefetches;
+
+    return STATUS_SUCCESS;
 }
 
 /* Class 57 - Extended process information */

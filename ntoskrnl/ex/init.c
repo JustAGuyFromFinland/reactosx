@@ -93,6 +93,75 @@ PVOID ExpNlsSectionPointer;
 BOOLEAN ExCmosClockIsSane = TRUE;
 BOOLEAN ExpRealTimeIsUniversal;
 
+static VOID
+ExpInitializePrefetcherConfiguration(VOID)
+{
+    UNICODE_STRING KeyName;
+    UNICODE_STRING ValueName;
+    OBJECT_ATTRIBUTES ObjectAttributes;
+    HANDLE KeyHandle;
+    NTSTATUS Status;
+    ULONG EnablePrefetcher = 1;
+    BOOLEAN ValueExists = FALSE;
+    UCHAR ValueBuffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)];
+    PKEY_VALUE_PARTIAL_INFORMATION ValueInfo = (PKEY_VALUE_PARTIAL_INFORMATION)ValueBuffer;
+    ULONG Length;
+
+    RtlInitUnicodeString(&KeyName,
+                         L"\\REGISTRY\\MACHINE\\SYSTEM\\CURRENTCONTROLSET"
+                         L"\\CONTROL\\SESSION MANAGER\\PREFETCHER");
+    InitializeObjectAttributes(&ObjectAttributes,
+                               &KeyName,
+                               OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
+                               NULL,
+                               NULL);
+
+    Status = ZwOpenKey(&KeyHandle, KEY_QUERY_VALUE, &ObjectAttributes);
+    if (NT_SUCCESS(Status))
+    {
+        RtlInitUnicodeString(&ValueName, L"EnablePrefetcher");
+        Status = ZwQueryValueKey(KeyHandle,
+                                 &ValueName,
+                                 KeyValuePartialInformation,
+                                 ValueInfo,
+                                 sizeof(ValueBuffer),
+                                 &Length);
+        if (NT_SUCCESS(Status) &&
+            ValueInfo->Type == REG_DWORD &&
+            ValueInfo->DataLength == sizeof(ULONG))
+        {
+            EnablePrefetcher = *(PULONG)ValueInfo->Data;
+            ValueExists = TRUE;
+        }
+
+        NtClose(KeyHandle);
+    }
+
+    if (!ValueExists)
+    {
+        Status = ZwCreateKey(&KeyHandle,
+                             KEY_SET_VALUE,
+                             &ObjectAttributes,
+                             0,
+                             NULL,
+                             REG_OPTION_NON_VOLATILE,
+                             NULL);
+        if (NT_SUCCESS(Status))
+        {
+            RtlInitUnicodeString(&ValueName, L"EnablePrefetcher");
+            ZwSetValueKey(KeyHandle,
+                          &ValueName,
+                          0,
+                          REG_DWORD,
+                          &EnablePrefetcher,
+                          sizeof(EnablePrefetcher));
+            ZwClose(KeyHandle);
+        }
+    }
+
+    CcPfEnablePrefetcher = (EnablePrefetcher != 0);
+}
+
 /* FUNCTIONS ****************************************************************/
 
 CODE_SEG("INIT")
@@ -551,7 +620,7 @@ ExpLoadInitialProcess(IN PINIT_BUFFER InitBuffer,
     RtlAppendUnicodeStringToString(&Environment, &NullString);
 
     /* Prepare the prefetcher */
-    //CcPfBeginBootPhase(150);
+    CcPfBeginBootPhase(150);
 
     /* Create SMSS process */
     SmssName = ProcessParams->ImagePathName;
@@ -1695,6 +1764,9 @@ Phase1InitializationDiscard(IN PVOID Context)
 
     /* Initialize the Registry */
     if (!CmInitSystem1()) KeBugCheck(CONFIG_INITIALIZATION_FAILED);
+
+    /* Load prefetcher configuration */
+    ExpInitializePrefetcherConfiguration();
 
     /* Initialize Prefetcher */
     CcPfInitializePrefetcher();

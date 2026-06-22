@@ -167,6 +167,27 @@ typedef struct _PFSN_PREFETCHER_GLOBALS
     LONG ActivePrefetches;
 } PFSN_PREFETCHER_GLOBALS, *PPFSN_PREFETCHER_GLOBALS;
 
+extern BOOLEAN CcPfEnablePrefetcher;
+extern PFSN_PREFETCHER_GLOBALS CcPfGlobals;
+
+#define CCPF_TRACE_BLOB_SIGNATURE 0x46435054 /* "TPCF" */
+#define CCPF_TRACE_BLOB_VERSION   1
+
+typedef struct _CCPF_TRACE_BUFFER_BLOB
+{
+    ULONG NumEntries;
+    ULONG MaxEntries;
+} CCPF_TRACE_BUFFER_BLOB, *PCCPF_TRACE_BUFFER_BLOB;
+
+typedef struct _CCPF_TRACE_BLOB_HEADER
+{
+    ULONG Signature;
+    ULONG Version;
+    ULONG Size;
+    PF_TRACE_HEADER Trace;
+    ULONG NumBuffers;
+} CCPF_TRACE_BLOB_HEADER, *PCCPF_TRACE_BLOB_HEADER;
+
 typedef struct _ROS_SHARED_CACHE_MAP
 {
     CSHORT NodeTypeCode;
@@ -293,6 +314,26 @@ VOID
 NTAPI
 CcPfInitializePrefetcher(
     VOID
+);
+
+CODE_SEG("INIT")
+VOID
+NTAPI
+CcPfBeginBootPhase(
+    _In_ ULONG BootPhase
+);
+
+PPFSN_TRACE_HEADER
+NTAPI
+CcPfCreateTrace(
+    _In_opt_ PEPROCESS Process,
+    _In_ ULONG ScenarioType
+);
+
+VOID
+NTAPI
+CcPfDestroyTrace(
+    _In_opt_ PPFSN_TRACE_HEADER Trace
 );
 
 VOID

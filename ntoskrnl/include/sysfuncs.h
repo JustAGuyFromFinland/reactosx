@@ -237,6 +237,7 @@
     SVC_(SetInformationObject, 4)
     SVC_(SetInformationProcess, 4)
     SVC_(SetInformationThread, 4)
+    SVC_(SetInformationVirtualMemory, 6)
     SVC_(SetInformationToken, 4)
     SVC_(SetIntervalProfile, 2)
     SVC_(SetIoCompletion, 5)

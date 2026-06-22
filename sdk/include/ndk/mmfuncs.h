@@ -273,6 +273,18 @@ NtQueryVirtualMemory(
 NTSYSCALLAPI
 NTSTATUS
 NTAPI
+NtSetInformationVirtualMemory(
+    _In_ HANDLE ProcessHandle,
+    _In_ VIRTUAL_MEMORY_INFORMATION_CLASS MemoryInformationClass,
+    _In_ ULONG_PTR NumberOfEntries,
+    _In_reads_opt_(NumberOfEntries) PMEMORY_RANGE_ENTRY VirtualAddresses,
+    _In_opt_ PVOID MemoryInformation,
+    _In_ ULONG MemoryInformationLength
+);
+
+NTSYSCALLAPI
+NTSTATUS
+NTAPI
 NtReadVirtualMemory(
     _In_ HANDLE ProcessHandle,
     _In_ PVOID BaseAddress,

@@ -4449,6 +4449,134 @@ NtQueryVirtualMemory(IN HANDLE ProcessHandle,
     return Status;
 }
 
+static NTSTATUS
+MiPrefetchVirtualMemoryRange(
+    _In_ PEPROCESS Process,
+    _In_ PVOID BaseAddress,
+    _In_ SIZE_T NumberOfBytes,
+    _In_ KPROCESSOR_MODE PreviousMode)
+{
+    SIZE_T Offset = 0;
+
+    if (!BaseAddress || !NumberOfBytes)
+    {
+        return STATUS_SUCCESS;
+    }
+
+    while (Offset < NumberOfBytes)
+    {
+        UCHAR Dummy;
+        SIZE_T BytesCopied = 0;
+        NTSTATUS Status;
+
+        Status = MmCopyVirtualMemory(Process,
+                                     (PVOID)((ULONG_PTR)BaseAddress + Offset),
+                                     PsGetCurrentProcess(),
+                                     &Dummy,
+                                     sizeof(Dummy),
+                                     PreviousMode,
+                                     &BytesCopied);
+
+        if (!NT_SUCCESS(Status))
+        {
+            Status = STATUS_SUCCESS;
+        }
+
+        Offset += PAGE_SIZE;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS
+NTAPI
+NtSetInformationVirtualMemory(
+    _In_ HANDLE ProcessHandle,
+    _In_ VIRTUAL_MEMORY_INFORMATION_CLASS MemoryInformationClass,
+    _In_ ULONG_PTR NumberOfEntries,
+    _In_reads_opt_(NumberOfEntries) PMEMORY_RANGE_ENTRY VirtualAddresses,
+    _In_opt_ PVOID MemoryInformation,
+    _In_ ULONG MemoryInformationLength)
+{
+    PEPROCESS Process;
+    KPROCESSOR_MODE PreviousMode = ExGetPreviousMode();
+    NTSTATUS Status;
+    ULONG_PTR Index;
+    PAGED_CODE();
+
+    if (MemoryInformationClass != VmPrefetchInformation)
+    {
+        return STATUS_INVALID_PARAMETER_2;
+    }
+
+    if (NumberOfEntries == 0)
+    {
+        return STATUS_INVALID_PARAMETER_3;
+    }
+
+    if (MemoryInformation == NULL)
+    {
+        return STATUS_INVALID_PARAMETER_5;
+    }
+
+    if (MemoryInformationLength != sizeof(ULONG))
+    {
+        return STATUS_INVALID_PARAMETER_6;
+    }
+
+    if (PreviousMode != KernelMode)
+    {
+        _SEH2_TRY
+        {
+            ProbeForRead(VirtualAddresses,
+                         NumberOfEntries * sizeof(MEMORY_RANGE_ENTRY),
+                         sizeof(ULONG_PTR));
+            ProbeForRead(MemoryInformation,
+                         MemoryInformationLength,
+                         sizeof(ULONG));
+        }
+        _SEH2_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
+        {
+            _SEH2_YIELD(return _SEH2_GetExceptionCode());
+        }
+        _SEH2_END;
+    }
+
+    Status = ObReferenceObjectByHandle(ProcessHandle,
+                                       PROCESS_VM_READ,
+                                       PsProcessType,
+                                       PreviousMode,
+                                       (PVOID *)&Process,
+                                       NULL);
+    if (!NT_SUCCESS(Status))
+    {
+        return Status;
+    }
+
+    for (Index = 0; Index < NumberOfEntries; Index++)
+    {
+        PMEMORY_RANGE_ENTRY Entry = &VirtualAddresses[Index];
+
+        if (Entry->NumberOfBytes == 0)
+        {
+            Status = STATUS_INVALID_PARAMETER_4;
+            break;
+        }
+
+        Status = MiPrefetchVirtualMemoryRange(Process,
+                                              Entry->VirtualAddress,
+                                              Entry->NumberOfBytes,
+                                              PreviousMode);
+        if (!NT_SUCCESS(Status))
+        {
+            Status = STATUS_SUCCESS;
+        }
+    }
+
+    ObDereferenceObject(Process);
+    return Status;
+}
+
 /*
  * @implemented
  */
